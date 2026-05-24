@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
   
   try {
@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     parts.push({ text: prompt });
 
     const response = await fetch(
-      https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
