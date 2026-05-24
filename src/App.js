@@ -194,7 +194,7 @@ export default function App() {
         }
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        const compressed = canvas.toDataURL("image/jpeg", 0.8);
+        const compressed = canvas.toDataURL("image/jpeg", 0.5);
         setPhotoBase64(compressed.split(",")[1]);
         setPhotoMediaType("image/jpeg");
         setPhotoPreview(compressed);
