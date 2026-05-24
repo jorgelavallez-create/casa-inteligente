@@ -51,6 +51,17 @@ function getExpiryStatus(dateStr) {
   return "ok";
 }
 
+async function callAI(prompt, imageBase64, imageMediaType) {
+  const response = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, imageBase64, imageMediaType })
+  });
+  const data = await response.json();
+  if (data.error) throw new Error(data.error);
+  return data.text;
+}
+
 export default function App() {
   const [tab, setTab] = useState("planner");
   const [recipes, setRecipes] = useState([]);
@@ -149,12 +160,8 @@ export default function App() {
       const inventorySummary = inventory.map(i => `${i.name}: ${i.qty}${i.unit}`).join(", ");
       const recipeList = recipes.map(r => `${r.name} (${r.kidsApproved ? "✓ niños" : "✗ niños"}, ${r.prepTime}min)`).join(", ");
       const prompt = `Sugiere un menú semanal para una familia con niños melindrosos.\n\nRecetas: ${recipeList}\nInventario: ${inventorySummary}\n\nResponde SOLO con JSON sin backticks:\n{"Lunes":"nombre","Martes":"nombre","Miércoles":"nombre","Jueves":"nombre","Viernes":"nombre","Sábado":"nombre","Domingo":"nombre"}\n\nPrioriza recetas aptas para niños entre semana. Usa solo nombres exactos de la lista.`;
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json", "x-api-key": process.env.REACT_APP_ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] })
-      });
-      const data = await response.json();
-      const suggestion = JSON.parse(data.content.map(c => c.text || "").join("").trim());
+      const text = await callAI(prompt);
+      const suggestion = JSON.parse(text.trim());
       const newPlan = {};
       DAYS.forEach(day => { const found = recipes.find(r => r.name === suggestion[day]); newPlan[day] = found || null; });
       await updateWeekPlan(newPlan);
@@ -168,12 +175,8 @@ export default function App() {
     setImportLoading(true); setImportResult(null); setImportError("");
     try {
       const prompt = `Extrae la información de esta receta y devuelve ÚNICAMENTE un JSON válido sin backticks.\n\nTexto:\n"""\n${importText}\n"""\n\nJSON:\n{"name":"nombre","prepTime":número,"category":"pasta|pollo|carnes|mariscos|vegetariano|sopas|ensaladas|mexicano|postres|desayunos|otro","kidsApproved":true/false,"kidsNote":"razón breve","ingredients":[{"name":"ingrediente","qty":número,"unit":"g|kg|ml|L|tsp|tbsp|pza|taza|dientes|al gusto","category":"despensa|carnes|lácteos|verduras|frutas"}],"tags":["tag"]}\n\nTraduce al español si está en inglés.`;
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json", "x-api-key": process.env.REACT_APP_ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] })
-      });
-      const data = await response.json();
-      setImportResult(JSON.parse(data.content.map(c => c.text || "").join("").trim()));
+      const text = await callAI(prompt);
+      setImportResult(JSON.parse(text.trim()));
     } catch (e) { setImportError("No pude interpretar la receta. Intenta con más detalle."); }
     setImportLoading(false);
   }
@@ -211,40 +214,15 @@ export default function App() {
     setImportLoading(true); setImportResult(null); setImportError("");
     try {
       const prompt = `Eres un asistente de cocina. Analiza esta imagen de una receta y extrae toda la información.\n\nDevuelve ÚNICAMENTE un JSON válido sin backticks ni markdown:\n{"name":"nombre de la receta","prepTime":número en minutos,"category":"pasta|pollo|carnes|mariscos|vegetariano|sopas|ensaladas|mexicano|postres|desayunos|otro","kidsApproved":true o false,"kidsNote":"razón breve","ingredients":[{"name":"ingrediente en español","qty":número,"unit":"g|kg|ml|L|tsp|tbsp|pza|taza|dientes|al gusto","category":"despensa|carnes|lácteos|verduras|frutas"}],"tags":["tag1","tag2"]}\n\nSi hay texto en otro idioma, tradúcelo al español.`;
-      
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
-      
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": process.env.REACT_APP_ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: photoMediaType, data: photoBase64 } },
-              { type: "text", text: prompt }
-            ]
-          }]
-        })
-      });
-      
-      clearTimeout(timeout);
-      const data = await response.json();
-      const raw = data.content.map(c => c.text || "").join("").trim();
-      setImportResult(JSON.parse(raw));
+      const text = await callAI(prompt, photoBase64, photoMediaType);
+      const clean = text.trim().replace(/```json|```/g, "").trim();
+      setImportResult(JSON.parse(clean));
     } catch (e) {
-      if (e.name === "AbortError") {
-        setImportError("Tiempo agotado. La imagen puede ser muy pesada, intenta con una más pequeña.");
-      } else {
-        setImportError("Error: " + e.message);
-      }
+      setImportError("No pude leer la receta. Error: " + e.message);
     }
     setImportLoading(false);
   }
+
   async function confirmImport() {
     if (!importResult) return;
     await saveRecipe(importResult);
