@@ -217,7 +217,8 @@ export default function App() {
       });
       const data = await response.json();
       const raw = data.content.map(c => c.text || "").join("").trim();
-      setImportResult(JSON.parse(raw));
+      setImportError("Respuesta API: " + raw.substring(0, 300));
+      return;
     } catch (e) {
       console.log("ERROR:", JSON.stringify(e));
       setImportError("Error: " + (e?.message || JSON.stringify(e)));
