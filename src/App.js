@@ -186,7 +186,7 @@ export default function App() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const maxSize = 1024;
+        const maxSize = 800;
         let w = img.width, h = img.height;
         if (w > maxSize || h > maxSize) {
           if (w > h) { h = (h * maxSize) / w; w = maxSize; }
