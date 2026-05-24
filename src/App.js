@@ -150,7 +150,7 @@ export default function App() {
       const recipeList = recipes.map(r => `${r.name} (${r.kidsApproved ? "✓ niños" : "✗ niños"}, ${r.prepTime}min)`).join(", ");
       const prompt = `Sugiere un menú semanal para una familia con niños melindrosos.\n\nRecetas: ${recipeList}\nInventario: ${inventorySummary}\n\nResponde SOLO con JSON sin backticks:\n{"Lunes":"nombre","Martes":"nombre","Miércoles":"nombre","Jueves":"nombre","Viernes":"nombre","Sábado":"nombre","Domingo":"nombre"}\n\nPrioriza recetas aptas para niños entre semana. Usa solo nombres exactos de la lista.`;
       const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json", "x-api-key": process.env.REACT_APP_ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] })
       });
       const data = await response.json();
@@ -169,7 +169,7 @@ export default function App() {
     try {
       const prompt = `Extrae la información de esta receta y devuelve ÚNICAMENTE un JSON válido sin backticks.\n\nTexto:\n"""\n${importText}\n"""\n\nJSON:\n{"name":"nombre","prepTime":número,"category":"pasta|pollo|carnes|mariscos|vegetariano|sopas|ensaladas|mexicano|postres|desayunos|otro","kidsApproved":true/false,"kidsNote":"razón breve","ingredients":[{"name":"ingrediente","qty":número,"unit":"g|kg|ml|L|tsp|tbsp|pza|taza|dientes|al gusto","category":"despensa|carnes|lácteos|verduras|frutas"}],"tags":["tag"]}\n\nTraduce al español si está en inglés.`;
       const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json", "x-api-key": process.env.REACT_APP_ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] })
       });
       const data = await response.json();
@@ -217,7 +217,7 @@ export default function App() {
       
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-api-key": process.env.REACT_APP_ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
         signal: controller.signal,
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
