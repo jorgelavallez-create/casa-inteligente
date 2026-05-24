@@ -210,9 +210,15 @@ export default function App() {
     if (!photoBase64) return;
     setImportLoading(true); setImportResult(null); setImportError("");
     try {
-      const prompt = `Eres un asistente de cocina. Analiza esta imagen de una receta y extrae toda la información.\n\nDevuelve ÚNICAMENTE un JSON válido sin backticks ni markdown:\n{"name":"nombre de la receta","prepTime":número en minutos,"category":"pasta|pollo|carnes|mariscos|vegetariano|sopas|ensaladas|mexicano|postres|desayunos|otro","kidsApproved":true o false,"kidsNote":"razón breve de por qué es o no apta para niños","ingredients":[{"name":"ingrediente en español","qty":número,"unit":"g|kg|ml|L|tsp|tbsp|pza|taza|dientes|al gusto","category":"despensa|carnes|lácteos|verduras|frutas"}],"tags":["tag1","tag2"]}\n\nSi hay texto en otro idioma, tradúcelo al español. Si no puedes leer algún dato, usa valores razonables.`;
+      const prompt = `Eres un asistente de cocina. Analiza esta imagen de una receta y extrae toda la información.\n\nDevuelve ÚNICAMENTE un JSON válido sin backticks ni markdown:\n{"name":"nombre de la receta","prepTime":número en minutos,"category":"pasta|pollo|carnes|mariscos|vegetariano|sopas|ensaladas|mexicano|postres|desayunos|otro","kidsApproved":true o false,"kidsNote":"razón breve","ingredients":[{"name":"ingrediente en español","qty":número,"unit":"g|kg|ml|L|tsp|tbsp|pza|taza|dientes|al gusto","category":"despensa|carnes|lácteos|verduras|frutas"}],"tags":["tag1","tag2"]}\n\nSi hay texto en otro idioma, tradúcelo al español.`;
+      
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      
       const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
@@ -225,15 +231,20 @@ export default function App() {
           }]
         })
       });
+      
+      clearTimeout(timeout);
       const data = await response.json();
-     const raw = data.content.map(c => c.text || "").join("").trim();
+      const raw = data.content.map(c => c.text || "").join("").trim();
       setImportResult(JSON.parse(raw));
     } catch (e) {
-      setImportError("Error: " + e.message + " | data: " + JSON.stringify(data).substring(0, 200));
+      if (e.name === "AbortError") {
+        setImportError("Tiempo agotado. La imagen puede ser muy pesada, intenta con una más pequeña.");
+      } else {
+        setImportError("Error: " + e.message);
+      }
     }
     setImportLoading(false);
   }
-
   async function confirmImport() {
     if (!importResult) return;
     await saveRecipe(importResult);
