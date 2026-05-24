@@ -219,7 +219,8 @@ export default function App() {
       const raw = data.content.map(c => c.text || "").join("").trim();
       setImportResult(JSON.parse(raw));
     } catch (e) {
-      setImportError("No pude leer la receta de la foto. Intenta con una imagen más clara.");
+      console.log("ERROR:", JSON.stringify(e));
+      setImportError("Error: " + (e?.message || JSON.stringify(e)));
     }
     setImportLoading(false);
   }
