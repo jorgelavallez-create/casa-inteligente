@@ -2,17 +2,25 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
   
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_KEY,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify(req.body)
-    });
+    const { prompt, imageBase64, imageMediaType } = req.body;
+    
+    const parts = [];
+    if (imageBase64) {
+      parts.push({ inlineData: { mimeType: imageMediaType, data: imageBase64 } });
+    }
+    parts.push({ text: prompt });
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts }] })
+      }
+    );
     const data = await response.json();
-    res.status(200).json(data);
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    res.status(200).json({ text });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
