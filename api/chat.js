@@ -4,25 +4,27 @@ module.exports = async function handler(req, res) {
   try {
     const { prompt, imageBase64, imageMediaType } = req.body;
     
-    const parts = [];
+    const content = [];
     if (imageBase64) {
-      parts.push({ inlineData: { mimeType: imageMediaType, data: imageBase64 } });
+      content.push({ type: "image", source: { type: "base64", media_type: imageMediaType, data: imageBase64 } });
     }
-    parts.push({ text: prompt });
+    content.push({ type: "text", text: prompt });
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          contents: [{ parts }],
-          generationConfig: { maxOutputTokens: 2048 }
-        })
-      }
-    );
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2048,
+        messages: [{ role: "user", content }]
+      })
+    });
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const text = data.content?.map(c => c.text || "").join("") || "";
     res.status(200).json({ text });
   } catch (e) {
     res.status(500).json({ error: e.message });
