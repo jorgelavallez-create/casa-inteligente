@@ -67,7 +67,7 @@ export default function App() {
   const [checkedItems, setCheckedItems] = useState({});
   const [filterKids, setFilterKids] = useState(false);
   const [showImporter, setShowImporter] = useState(false);
-  const [importMode, setImportMode] = useState("text"); // "text" | "photo"
+  const [importMode, setImportMode] = useState("text");
   const [importText, setImportText] = useState("");
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState(null);
@@ -163,7 +163,6 @@ export default function App() {
     setAiLoading(false);
   }
 
-  // ── IMPORTAR POR TEXTO ──────────────────────────────────────────────────────
   async function importRecipeFromText() {
     if (!importText.trim()) return;
     setImportLoading(true); setImportResult(null); setImportError("");
@@ -179,34 +178,34 @@ export default function App() {
     setImportLoading(false);
   }
 
-  // ── IMPORTAR POR FOTO ───────────────────────────────────────────────────────
   function handlePhotoSelect(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const maxSize = 1024;
-      let w = img.width, h = img.height;
-      if (w > maxSize || h > maxSize) {
-        if (w > h) { h = (h * maxSize) / w; w = maxSize; }
-        else { w = (w * maxSize) / h; h = maxSize; }
-      }
-      canvas.width = w; canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-      const compressed = canvas.toDataURL("image/jpeg", 0.8);
-      setPhotoBase64(compressed.split(",")[1]);
-      setPhotoMediaType("image/jpeg");
-      setPhotoPreview(compressed);
-      setImportResult(null);
-      setImportError("");
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxSize = 1024;
+        let w = img.width, h = img.height;
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = (h * maxSize) / w; w = maxSize; }
+          else { w = (w * maxSize) / h; h = maxSize; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL("image/jpeg", 0.8);
+        setPhotoBase64(compressed.split(",")[1]);
+        setPhotoMediaType("image/jpeg");
+        setPhotoPreview(compressed);
+        setImportResult(null);
+        setImportError("");
+      };
+      img.src = ev.target.result;
     };
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
-}
+    reader.readAsDataURL(file);
+  }
+
   async function importRecipeFromPhoto() {
     if (!photoBase64) return;
     setImportLoading(true); setImportResult(null); setImportError("");
@@ -228,11 +227,9 @@ export default function App() {
       });
       const data = await response.json();
       const raw = data.content.map(c => c.text || "").join("").trim();
-      setImportError("Respuesta API: " + raw.substring(0, 300));
-      return;
+      setImportResult(JSON.parse(raw));
     } catch (e) {
-      console.log("ERROR:", JSON.stringify(e));
-      setImportError("Error: " + (e?.message || JSON.stringify(e)));
+      setImportError("No pude leer la receta de la foto. Intenta con una imagen más clara.");
     }
     setImportLoading(false);
   }
@@ -375,13 +372,11 @@ export default function App() {
               </div>
             )}
 
-            {/* ── MODAL IMPORTADOR ── */}
             {showImporter && (
               <div style={S.modal}>
                 <div style={{ ...S.modalBox, maxWidth: 560 }}>
                   <h3 style={S.modalTitle}>✨ Importar receta con IA</h3>
 
-                  {/* Tabs texto / foto */}
                   {!importResult && (
                     <div style={{ display: "flex", gap: 0, marginBottom: 16, border: "1px solid #e0dbd0", borderRadius: 8, overflow: "hidden" }}>
                       <button
@@ -395,7 +390,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Modo texto */}
                   {importMode === "text" && !importResult && !importLoading && (
                     <>
                       <p style={{ color: "#666", fontSize: 13, margin: "0 0 12px", fontFamily: "sans-serif", lineHeight: 1.5 }}>Pega o escribe la receta en cualquier formato. La IA la interpreta y la guarda para toda la familia.</p>
@@ -407,12 +401,9 @@ export default function App() {
                     </>
                   )}
 
-                  {/* Modo foto */}
                   {importMode === "photo" && !importResult && !importLoading && (
                     <>
                       <p style={{ color: "#666", fontSize: 13, margin: "0 0 12px", fontFamily: "sans-serif", lineHeight: 1.5 }}>Sube una foto de la receta — de un libro, revista, pantalla, lo que sea. La IA la lee y extrae todo.</p>
-
-                      {/* Drop zone / preview */}
                       <div
                         style={{ border: "2px dashed #e0dbd0", borderRadius: 10, padding: photoPreview ? 0 : "32px 16px", textAlign: "center", cursor: "pointer", marginBottom: 12, overflow: "hidden", background: photoPreview ? "black" : "#fafaf8", transition: "all 0.2s" }}
                         onClick={() => fileInputRef.current?.click()}
@@ -423,7 +414,7 @@ export default function App() {
                           <>
                             <div style={{ fontSize: 36, marginBottom: 8 }}>📸</div>
                             <div style={{ fontSize: 14, fontWeight: 600, fontFamily: "sans-serif", color: "#2c2416", marginBottom: 4 }}>Toca para seleccionar foto</div>
-                            <div style={{ fontSize: 12, color: "#aaa", fontFamily: "sans-serif" }}>JPG, PNG, HEIC — desde tu galería o cámara</div>
+                            <div style={{ fontSize: 12, color: "#aaa", fontFamily: "sans-serif" }}>JPG, PNG — desde tu galería o cámara</div>
                           </>
                         )}
                       </div>
