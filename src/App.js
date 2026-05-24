@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "firebase/firestore";
 
@@ -67,10 +67,15 @@ export default function App() {
   const [checkedItems, setCheckedItems] = useState({});
   const [filterKids, setFilterKids] = useState(false);
   const [showImporter, setShowImporter] = useState(false);
+  const [importMode, setImportMode] = useState("text"); // "text" | "photo"
   const [importText, setImportText] = useState("");
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState("");
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoBase64, setPhotoBase64] = useState(null);
+  const [photoMediaType, setPhotoMediaType] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const unsubRecipes = onSnapshot(collection(db, "recipes"), snap => {
@@ -158,6 +163,7 @@ export default function App() {
     setAiLoading(false);
   }
 
+  // ── IMPORTAR POR TEXTO ──────────────────────────────────────────────────────
   async function importRecipeFromText() {
     if (!importText.trim()) return;
     setImportLoading(true); setImportResult(null); setImportError("");
@@ -173,10 +179,63 @@ export default function App() {
     setImportLoading(false);
   }
 
+  // ── IMPORTAR POR FOTO ───────────────────────────────────────────────────────
+  function handlePhotoSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const mediaType = file.type || "image/jpeg";
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target.result.split(",")[1];
+      setPhotoBase64(base64);
+      setPhotoMediaType(mediaType);
+      setPhotoPreview(ev.target.result);
+      setImportResult(null);
+      setImportError("");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function importRecipeFromPhoto() {
+    if (!photoBase64) return;
+    setImportLoading(true); setImportResult(null); setImportError("");
+    try {
+      const prompt = `Eres un asistente de cocina. Analiza esta imagen de una receta y extrae toda la información.\n\nDevuelve ÚNICAMENTE un JSON válido sin backticks ni markdown:\n{"name":"nombre de la receta","prepTime":número en minutos,"category":"pasta|pollo|carnes|mariscos|vegetariano|sopas|ensaladas|mexicano|postres|desayunos|otro","kidsApproved":true o false,"kidsNote":"razón breve de por qué es o no apta para niños","ingredients":[{"name":"ingrediente en español","qty":número,"unit":"g|kg|ml|L|tsp|tbsp|pza|taza|dientes|al gusto","category":"despensa|carnes|lácteos|verduras|frutas"}],"tags":["tag1","tag2"]}\n\nSi hay texto en otro idioma, tradúcelo al español. Si no puedes leer algún dato, usa valores razonables.`;
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: photoMediaType, data: photoBase64 } },
+              { type: "text", text: prompt }
+            ]
+          }]
+        })
+      });
+      const data = await response.json();
+      const raw = data.content.map(c => c.text || "").join("").trim();
+      setImportResult(JSON.parse(raw));
+    } catch (e) {
+      setImportError("No pude leer la receta de la foto. Intenta con una imagen más clara.");
+    }
+    setImportLoading(false);
+  }
+
   async function confirmImport() {
     if (!importResult) return;
     await saveRecipe(importResult);
-    setImportText(""); setImportResult(null); setImportError(""); setShowImporter(false);
+    setImportText(""); setImportResult(null); setImportError("");
+    setPhotoPreview(null); setPhotoBase64(null); setPhotoMediaType(null);
+    setShowImporter(false);
+  }
+
+  function resetImporter() {
+    setImportText(""); setImportResult(null); setImportError("");
+    setPhotoPreview(null); setPhotoBase64(null); setPhotoMediaType(null);
+    setImportMode("text");
   }
 
   const expiringItems = inventory.filter(i => ["critical", "warning", "expired"].includes(getExpiryStatus(i.expiry)));
@@ -303,20 +362,82 @@ export default function App() {
               </div>
             )}
 
+            {/* ── MODAL IMPORTADOR ── */}
             {showImporter && (
               <div style={S.modal}>
                 <div style={{ ...S.modalBox, maxWidth: 560 }}>
                   <h3 style={S.modalTitle}>✨ Importar receta con IA</h3>
-                  <p style={{ color: "#666", fontSize: 13, margin: "0 0 12px", fontFamily: "sans-serif", lineHeight: 1.5 }}>Pega o escribe la receta en cualquier formato. La IA la interpreta y la guarda para toda la familia.</p>
-                  <textarea style={{ ...S.input, height: 160, resize: "vertical", fontSize: 13 }} placeholder={"Pollo al horno\n- 4 pechugas\n- 3 papas\n- Aceite al gusto\nHornear 40 min a 180°C"} value={importText} onChange={e => { setImportText(e.target.value); setImportResult(null); setImportError(""); }} />
-                  {!importResult && !importLoading && (
-                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
-                      <button style={S.btnSecondary} onClick={() => { setShowImporter(false); setImportText(""); setImportResult(null); }}>Cancelar</button>
-                      <button style={S.btnAI} onClick={importRecipeFromText} disabled={!importText.trim()}>✨ Interpretar</button>
+
+                  {/* Tabs texto / foto */}
+                  {!importResult && (
+                    <div style={{ display: "flex", gap: 0, marginBottom: 16, border: "1px solid #e0dbd0", borderRadius: 8, overflow: "hidden" }}>
+                      <button
+                        style={{ flex: 1, padding: "10px 0", border: "none", cursor: "pointer", fontSize: 14, fontFamily: "sans-serif", fontWeight: importMode === "text" ? 700 : 400, background: importMode === "text" ? "#2c2416" : "white", color: importMode === "text" ? "#e8a838" : "#666", transition: "all 0.2s" }}
+                        onClick={() => { setImportMode("text"); setImportError(""); setImportResult(null); }}
+                      >📝 Pegar texto</button>
+                      <button
+                        style={{ flex: 1, padding: "10px 0", border: "none", borderLeft: "1px solid #e0dbd0", cursor: "pointer", fontSize: 14, fontFamily: "sans-serif", fontWeight: importMode === "photo" ? 700 : 400, background: importMode === "photo" ? "#2c2416" : "white", color: importMode === "photo" ? "#e8a838" : "#666", transition: "all 0.2s" }}
+                        onClick={() => { setImportMode("photo"); setImportError(""); setImportResult(null); }}
+                      >📸 Subir foto</button>
                     </div>
                   )}
-                  {importLoading && <div style={{ textAlign: "center", padding: "20px 0", color: "#888", fontFamily: "sans-serif" }}>⟳ Analizando la receta...</div>}
+
+                  {/* Modo texto */}
+                  {importMode === "text" && !importResult && !importLoading && (
+                    <>
+                      <p style={{ color: "#666", fontSize: 13, margin: "0 0 12px", fontFamily: "sans-serif", lineHeight: 1.5 }}>Pega o escribe la receta en cualquier formato. La IA la interpreta y la guarda para toda la familia.</p>
+                      <textarea style={{ ...S.input, height: 160, resize: "vertical", fontSize: 13 }} placeholder={"Pollo al horno\n- 4 pechugas\n- 3 papas\n- Aceite al gusto\nHornear 40 min a 180°C"} value={importText} onChange={e => { setImportText(e.target.value); setImportResult(null); setImportError(""); }} />
+                      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
+                        <button style={S.btnSecondary} onClick={() => { setShowImporter(false); resetImporter(); }}>Cancelar</button>
+                        <button style={S.btnAI} onClick={importRecipeFromText} disabled={!importText.trim()}>✨ Interpretar</button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Modo foto */}
+                  {importMode === "photo" && !importResult && !importLoading && (
+                    <>
+                      <p style={{ color: "#666", fontSize: 13, margin: "0 0 12px", fontFamily: "sans-serif", lineHeight: 1.5 }}>Sube una foto de la receta — de un libro, revista, pantalla, lo que sea. La IA la lee y extrae todo.</p>
+
+                      {/* Drop zone / preview */}
+                      <div
+                        style={{ border: "2px dashed #e0dbd0", borderRadius: 10, padding: photoPreview ? 0 : "32px 16px", textAlign: "center", cursor: "pointer", marginBottom: 12, overflow: "hidden", background: photoPreview ? "black" : "#fafaf8", transition: "all 0.2s" }}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {photoPreview ? (
+                          <img src={photoPreview} alt="Receta" style={{ width: "100%", maxHeight: 260, objectFit: "contain", display: "block" }} />
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 36, marginBottom: 8 }}>📸</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, fontFamily: "sans-serif", color: "#2c2416", marginBottom: 4 }}>Toca para seleccionar foto</div>
+                            <div style={{ fontSize: 12, color: "#aaa", fontFamily: "sans-serif" }}>JPG, PNG, HEIC — desde tu galería o cámara</div>
+                          </>
+                        )}
+                      </div>
+                      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handlePhotoSelect} />
+
+                      {photoPreview && (
+                        <div style={{ fontSize: 12, color: "#888", fontFamily: "sans-serif", marginBottom: 12, textAlign: "center" }}>
+                          ✅ Foto lista — <span style={{ color: "#e05a4b", cursor: "pointer", textDecoration: "underline" }} onClick={() => { setPhotoPreview(null); setPhotoBase64(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>cambiar</span>
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+                        <button style={S.btnSecondary} onClick={() => { setShowImporter(false); resetImporter(); }}>Cancelar</button>
+                        <button style={S.btnAI} onClick={importRecipeFromPhoto} disabled={!photoBase64}>✨ Analizar foto</button>
+                      </div>
+                    </>
+                  )}
+
+                  {importLoading && (
+                    <div style={{ textAlign: "center", padding: "32px 0", color: "#888", fontFamily: "sans-serif" }}>
+                      <div style={{ fontSize: 32, marginBottom: 10 }}>{importMode === "photo" ? "🔍" : "⟳"}</div>
+                      <div>{importMode === "photo" ? "Leyendo la receta de la foto..." : "Analizando la receta..."}</div>
+                    </div>
+                  )}
+
                   {importError && <div style={{ background: "#e05a4b15", border: "1px solid #e05a4b", borderRadius: 8, padding: "10px 14px", color: "#e05a4b", fontSize: 13, fontFamily: "sans-serif", marginTop: 10 }}>{importError}</div>}
+
                   {importResult && (
                     <div style={{ background: "#f8f6f2", borderRadius: 10, padding: 16, marginTop: 10 }}>
                       <div style={{ fontSize: 13, color: "#888", fontFamily: "sans-serif", marginBottom: 8 }}>✅ Revisa y confirma:</div>
