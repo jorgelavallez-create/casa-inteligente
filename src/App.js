@@ -181,21 +181,32 @@ export default function App() {
 
   // ── IMPORTAR POR FOTO ───────────────────────────────────────────────────────
   function handlePhotoSelect(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const mediaType = file.type || "image/jpeg";
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target.result.split(",")[1];
-      setPhotoBase64(base64);
-      setPhotoMediaType(mediaType);
-      setPhotoPreview(ev.target.result);
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const maxSize = 1024;
+      let w = img.width, h = img.height;
+      if (w > maxSize || h > maxSize) {
+        if (w > h) { h = (h * maxSize) / w; w = maxSize; }
+        else { w = (w * maxSize) / h; h = maxSize; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      const compressed = canvas.toDataURL("image/jpeg", 0.8);
+      setPhotoBase64(compressed.split(",")[1]);
+      setPhotoMediaType("image/jpeg");
+      setPhotoPreview(compressed);
       setImportResult(null);
       setImportError("");
     };
-    reader.readAsDataURL(file);
-  }
-
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
   async function importRecipeFromPhoto() {
     if (!photoBase64) return;
     setImportLoading(true); setImportResult(null); setImportError("");
