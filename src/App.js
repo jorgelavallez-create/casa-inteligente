@@ -226,10 +226,10 @@ export default function App() {
         })
       });
       const data = await response.json();
-      const raw = data.content.map(c => c.text || "").join("").trim();
+     const raw = data.content.map(c => c.text || "").join("").trim();
       setImportResult(JSON.parse(raw));
     } catch (e) {
-      setImportError("No pude leer la receta de la foto. Intenta con una imagen más clara.");
+      setImportError("Error: " + e.message + " | data: " + JSON.stringify(data).substring(0, 200));
     }
     setImportLoading(false);
   }
