@@ -414,7 +414,7 @@ export default function App() {
                           </>
                         )}
                       </div>
-                      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handlePhotoSelect} />
+                      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhotoSelect} />
 
                       {photoPreview && (
                         <div style={{ fontSize: 12, color: "#888", fontFamily: "sans-serif", marginBottom: 12, textAlign: "center" }}>
